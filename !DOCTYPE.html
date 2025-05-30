@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Chuyển Văn Bản & Quay Màn Hình</title>
+  <style>
+    body { font-family: sans-serif; max-width: 800px; margin: auto; padding: 20px; }
+    textarea, select, input[type=range] { width: 100%; margin-top: 10px; margin-bottom: 10px; }
+    button { padding: 10px 15px; margin-right: 10px; }
+    video { width: 100%; max-width: 600px; margin-top: 10px; }
+    hr { margin: 30px 0; }
+  </style>
+</head>
+<body>
+
+  <h2>🔊 Chuyển Văn Bản Thành Giọng Nói</h2>
+  <textarea id="textInput" rows="4" placeholder="Nhập văn bản tại đây..."></textarea>
+
+  <label for="voiceSelect">Chọn Giọng Nói:</label>
+  <select id="voiceSelect"></select>
+
+  <label for="pitch">Cao độ (Pitch):</label>
+  <input type="range" id="pitch" min="0" max="2" step="0.1" value="1">
+
+  <div>
+    <button onclick="speakText()">▶️ Phát Giọng Nói</button>
+  </div>
+
+  <hr>
+
+  <h2>🎥 Quay Màn Hình (có tiếng nếu chọn đúng)</h2>
+  <p><strong>Lưu ý:</strong> Khi được hỏi, hãy chọn <b>Tab trình duyệt</b> và đánh dấu vào <b>"Chia sẻ âm thanh tab"</b>.</p>
+  <button onclick="startRecording()">▶️ Bắt đầu quay</button>
+  <button onclick="stopRecording()" disabled id="stopBtn">⏹ Dừng & Tải video</button>
+  <video id="preview" autoplay muted></video>
+
+  <script>
+    // Load danh sách giọng nói
+    document.addEventListener("DOMContentLoaded", function () {
+      const synth = window.speechSynthesis;
+      const voiceSelect = document.getElementById("voiceSelect");
+
+      function populateVoices() {
+        const voices = synth.getVoices();
+        voiceSelect.innerHTML = "";
+        voices.forEach((voice, index) => {
+          const option = document.createElement("option");
+          option.value = index;
+          option.textContent = `${voice.name} (${voice.lang})`;
+          voiceSelect.appendChild(option);
+        });
+      }
+
+      populateVoices();
+      if (synth.onvoiceschanged !== undefined) {
+        synth.onvoiceschanged = populateVoices;
+      }
+    });
+
+    // Phát giọng nói
+    function speakText() {
+      const text = document.getElementById("textInput").value;
+      const pitch = parseFloat(document.getElementById("pitch").value);
+      const voiceIndex = document.getElementById("voiceSelect").value;
+
+      const utterance = new SpeechSynthesisUtterance(text);
+      const voices = speechSynthesis.getVoices();
+      if (voices[voiceIndex]) utterance.voice = voices[voiceIndex];
+      utterance.pitch = pitch;
+
+      speechSynthesis.speak(utterance);
+    }
+
+    // Ghi màn hình
+    let mediaRecorder;
+    let recordedChunks = [];
+
+    async function startRecording() {
+      try {
+        const stream = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+          audio: true
+        });
+
+        const hasAudio = stream.getAudioTracks().length > 0;
+        if (!hasAudio) {
+          alert("⚠️ Không phát hiện âm thanh! Hãy chọn tab trình duyệt và bật 'Chia sẻ âm thanh tab'.");
+        }
+
+        document.getElementById("preview").srcObject = stream;
+
+        recordedChunks = [];
+        mediaRecorder = new MediaRecorder(stream);
+
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) recordedChunks.push(e.data);
+        };
+
+        mediaRecorder.onstop = () => {
+          const blob = new Blob(recordedChunks, { type: "video/webm" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "screen-recording.webm";
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+
+          // Dừng stream
+          document.getElementById("preview").srcObject.getTracks().forEach(track => track.stop());
+          document.getElementById("preview").srcObject = null;
+        };
+
+        mediaRecorder.start();
+        document.querySelector('button[onclick="startRecording()"]').disabled = true;
+        document.getElementById("stopBtn").disabled = false;
+      } catch (err) {
+        alert("🚫 Lỗi khi bắt đầu quay màn hình: " + err.message);
+      }
+    }
+
+    function stopRecording() {
+      mediaRecorder.stop();
+      document.querySelector('button[onclick="startRecording()"]').disabled = false;
+      document.getElementById("stopBtn").disabled = true;
+    }
+  </script>
+</body>
+</html>
